@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceRoot}/headers",
+                "/usr/include",
+                "/usr/include/x86_64-linux-gnu",
+                "/usr/lib/gcc/x86_64-linux-gnu/6/include",
+                "/usr/include/fuse",
+                "/usr/local/include"
+            ],
+            "defines": [],
+            "browse": {
+                "path": [
+                    "${workspaceRoot}/headers",
+                    "/usr/include",
+                    "/usr/include/x86_64-linux-gnu",
+                    "/usr/lib/gcc/x86_64-linux-gnu/6/include",
+                    "/usr/include/fuse",
+                    "/usr/local/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ]
+}
