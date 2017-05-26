@@ -137,31 +137,20 @@ block_size_t get_next_block_id(block_size_t id, bool need_lock)
 void expand_fatable(void)
 {
     pthread_rwlock_wrlock(&fatable_mem_lock);
-    pthread_mutex_lock(&fatable_file_lock);
 
-    // FIXME: bug! need to expand fatable in the memory!
     block_size_t new_block_num = metadata.block_num * MAGNIFICATION;
-    if (lseek(fatable_fd, 0, SEEK_END) == -1) {
-        perror("expand_fatable() lseek");
-        exit(1);
-    }
+    blockid_data_t *new_fatable = malloc(new_block_num * sizeof(blockid_data_t));
+    memcpy(new_fatable, fatable, metadata.block_num * sizeof(blockid_data_t));
+    free(fatable);
+    fatable = new_fatable;
     for (block_size_t i = metadata.block_num; i < new_block_num; i++) {
-        blockid_data_t blockdata;
-        if (i + 1 == new_block_num) {
-            blockdata = metadata.first_free_block_id;// end of the chain
-        } else {
-            blockdata = i + 1;// point to the next block, so that they will be string into a chain
-        }
-        if (write(fatable_fd, &blockdata, sizeof(blockdata)) == -1) {
-            perror("expand_fatable() write");
-            exit(1);
-        }
+        fatable[i] = i + 1;// point to the next block, so that they will be string into a chain
     }
+    fatable[new_block_num - 1] = metadata.first_free_block_id;// end of the chain
     metadata.first_free_block_id = metadata.block_num;// make first newly allocate block be the first of the chain
     metadata.free_block_num += new_block_num - metadata.block_num;
     metadata.block_num = new_block_num;
 
-    pthread_mutex_unlock(&fatable_file_lock);
     pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
