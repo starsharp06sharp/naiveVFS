@@ -28,8 +28,7 @@ void load_fatable(const char *path)
             exit(1);
         }
     }
-    off_t offset = lseek(fatable_fd, 0, SEEK_SET);
-    if (offset == -1) {
+    if (lseek(fatable_fd, 0, SEEK_SET) == -1) {
         perror("load_fatable() lseek");
         exit(1);
     }
