@@ -78,6 +78,7 @@ void create_fatable(const char *path)
     metadata.block_num = INIT_BLOCK_NUM;
     metadata.first_free_block_id = 1;// 0 is root directory file
     metadata.free_block_num = metadata.block_num - 1;
+    fatable = malloc(metadata.block_num * sizeof(blockid_data_t));
     fatable[0] = 0;// root dir, init with one block
     for (block_size_t i = 1; i < metadata.block_num; i++) {
         fatable[i] = i + 1;// point to the next block, so that they will be string into a chain
