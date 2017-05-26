@@ -18,6 +18,11 @@ struct fatable_metadata {
 #define MAGNIFICATION 1.5
 
 /*
+    initial this module
+*/
+void init_block_module(void);
+
+/*
     open and load the fatable in the given path
     if doesn't exist, create it
 */
@@ -32,7 +37,7 @@ void create_fatable(const char *path);
     write current fatable to disk
     (doesn't include metadata)
 */
-void sync_fatable();
+void sync_fatable(void);
 
 /*
     write current fatable's metadata to disk
@@ -42,8 +47,9 @@ void sync_fatable_metadata(void);
 /*
     get next block id by current id
     will exit if `id` and `fatable[id]` is out of range
+    need_lock should be fasle if you have lock the mem_lock already
 */
-block_size_t get_next_block_id(block_size_t id);
+block_size_t get_next_block_id(block_size_t id, bool need_lock);
 
 /*
     acquire a block chian

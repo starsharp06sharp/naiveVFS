@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,10 +12,19 @@
 int fatable_fd;
 struct fatable_metadata metadata;
 blockid_data_t *fatable;
+/*
+    priority: mem_lock > file_lock
+*/
+pthread_rwlock_t fatable_mem_lock;
+pthread_mutex_t fatable_file_lock;
 
 int blockfile_fd;
 
-// TODO: replace some read/write to pread/pwrite and add mutex to support multi-thread correctly
+void init_block_module(void)
+{
+    pthread_rwlock_init(&fatable_mem_lock, NULL);
+    pthread_mutex_init(&fatable_file_lock, NULL);
+}
 
 void load_fatable(const char *path)
 {
@@ -77,8 +87,11 @@ void create_fatable(const char *path)
     sync_fatable();
 }
 
-void sync_fatable()
+void sync_fatable(void)
 {
+    pthread_rwlock_rdlock(&fatable_mem_lock);
+    pthread_mutex_lock(&fatable_file_lock);
+
     if (lseek(fatable_fd, sizeof(metadata), SEEK_SET) == -1) {
         perror("sync_fatable() lseek");
         exit(1);
@@ -89,18 +102,32 @@ void sync_fatable()
             exit(1);
         }
     }
+
+    pthread_mutex_unlock(&fatable_file_lock);
+    pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
 void sync_fatable_metadata(void)
 {
+    // FIME: there is no need to sync metadata independently
+    pthread_rwlock_rdlock(&fatable_mem_lock);
+    pthread_mutex_lock(&fatable_file_lock);
+
     if (pwrite(fatable_fd, &metadata, sizeof(metadata), 0) == -1) {
         perror("sync_fatable_metadata() pwrite");
         exit(1);
     }
+
+    pthread_mutex_unlock(&fatable_file_lock);
+    pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
-block_size_t get_next_block_id(block_size_t id)
+block_size_t get_next_block_id(block_size_t id, bool need_lock)
 {
+    if (need_lock) {
+        pthread_rwlock_rdlock(&fatable_mem_lock);
+    }
+
     block_size_t res;
     if (id >= metadata.block_num) {
         printerrf("get_next_block_id(): block_id(%ud) out of range\n", (unsigned int) id);
@@ -111,11 +138,20 @@ block_size_t get_next_block_id(block_size_t id)
         printerrf("get_next_block_id(): bad fatable[%ud]=%ud\n", (unsigned int) id, (unsigned int) res);
         exit(1);
     }
+
+    if (need_lock) {
+        pthread_rwlock_unlock(&fatable_mem_lock);
+    }
+
     return res;
 }
 
 void expand_fatable(void)
 {
+    pthread_rwlock_wrlock(&fatable_mem_lock);
+    pthread_mutex_lock(&fatable_file_lock);
+
+    // FIXME: bug! need to expand fatable in the memory!
     block_size_t new_block_num = metadata.block_num * MAGNIFICATION;
     if (lseek(fatable_fd, 0, SEEK_END) == -1) {
         perror("expand_fatable() lseek");
@@ -136,40 +172,52 @@ void expand_fatable(void)
     metadata.first_free_block_id = metadata.block_num;// make first newly allocate block be the first of the chain
     metadata.free_block_num += new_block_num - metadata.block_num;
     metadata.block_num = new_block_num;
-    sync_fatable_metadata();
+
+    pthread_mutex_unlock(&fatable_file_lock);
+    pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
 block_size_t acquire_block_chain(block_size_t size)
 {
     block_size_t head, tail;
+
+    pthread_rwlock_wrlock(&fatable_mem_lock);
+
     if (size == 0) {
         printerrf("acquire_block_chain(): size is 0!\n");
         exit(1);
     } else if (size >= metadata.free_block_num) {
+        pthread_rwlock_unlock(&fatable_mem_lock);
         expand_fatable();
+        pthread_rwlock_wrlock(&fatable_mem_lock);
     }
     head = tail = metadata.first_free_block_id;
     for (block_size_t i = 1; i < size; i++) {
-        tail = get_next_block_id(tail);
+        tail = get_next_block_id(tail, false);
     }
-    metadata.first_free_block_id = get_next_block_id(tail);
+    metadata.first_free_block_id = get_next_block_id(tail, false);
     metadata.free_block_num -= size;
     fatable[tail] = tail;// point to it self, mark it as the tail
-    sync_fatable_metadata();
+
+    pthread_rwlock_unlock(&fatable_mem_lock);
+
     return head;
 }
 
 void release_block_chain(block_size_t head)
 {
+    pthread_rwlock_wrlock(&fatable_mem_lock);
+
     block_size_t tail = head, size = 1, next;
-    while((next = get_next_block_id(tail)) != tail) {
+    while((next = get_next_block_id(tail, false)) != tail) {
         tail = next;
         size++;
     }
     fatable[tail] = metadata.first_free_block_id;
     metadata.first_free_block_id = head;
     metadata.free_block_num += size;
-    sync_fatable_metadata();
+
+    pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
 void open_blockfile(const char *path)
