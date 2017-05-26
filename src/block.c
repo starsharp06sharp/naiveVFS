@@ -69,6 +69,10 @@ void create_fatable(const char *path)
     metadata.first_free_block_id = 1;// 0 is root directory file
     metadata.free_block_num = metadata.block_num - 1;
     sync_fatable_metadata();
+    if (lseek(fatable_fd, sizeof(metadata), SEEK_SET) == -1) {
+        perror("load_fatable() lseek");
+        exit(1);
+    }
     for (block_size_t i = 0; i < metadata.block_num; i++) {
         blockid_data_t blockdata;
         if (i == 0) {
@@ -87,14 +91,9 @@ void create_fatable(const char *path)
 
 void sync_fatable_metadata(void)
 {
-    off_t offset = lseek(fatable_fd, 0, SEEK_SET);
-    if (offset == -1) {
-        perror("sync_fatable_metadata() lseek");
+    if (pwrite(fatable_fd, &metadata, sizeof(metadata), 0) == -1) {
+        perror("sync_fatable_metadata() pwrite");
         exit(1);
-    }
-    ssize_t nbytes = write(fatable_fd, &metadata, sizeof(metadata));
-    if (nbytes == -1) {
-        perror("sync_fatable_metadata() write");
     }
 }
 
@@ -196,13 +195,9 @@ void create_blockfile(const char *path)
 
 void read_block(block_size_t id, uint8_t *buf)
 {
-    if (lseek(blockfile_fd, (off_t)id * BLOCK_SIZE, SEEK_SET) == -1) {
-        perror("read_block() lseek");
-        exit(1);
-    }
-    int nbytes = read(blockfile_fd, buf, BLOCK_SIZE);
+    int nbytes = pread(blockfile_fd, buf, BLOCK_SIZE, (off_t)id * BLOCK_SIZE);
     if (nbytes == -1) {
-        perror("read_block() read");
+        perror("read_block() pread");
     } else if (nbytes < BLOCK_SIZE) {
         memset(buf + nbytes, 0, BLOCK_SIZE - nbytes);
     }
@@ -210,12 +205,8 @@ void read_block(block_size_t id, uint8_t *buf)
 
 void write_block(block_size_t id, uint8_t *buf)
 {
-    if (lseek(blockfile_fd, (off_t)id * BLOCK_SIZE, SEEK_SET) == -1) {
-        perror("write_block() lseek");
-        exit(1);
-    }
-    if (write(blockfile_fd, buf, BLOCK_SIZE) == -1) {
-        perror("write_block() write");
+    if (pwrite(blockfile_fd, buf, BLOCK_SIZE, (off_t)id * BLOCK_SIZE) == -1) {
+        perror("write_block() pwrite");
         exit(1);
     }
 }
