@@ -23,6 +23,7 @@ void load_fatable(const char *path)
     if (fatable_fd == -1) {
         if (errno == ENOENT) {
             create_fatable(path);
+            return ;
         } else {
             perror("load_fatable() open");
             exit(1);
@@ -68,21 +69,23 @@ void create_fatable(const char *path)
     metadata.first_free_block_id = 1;// 0 is root directory file
     metadata.free_block_num = metadata.block_num - 1;
     sync_fatable_metadata();
+    fatable[0] = 0;// root dir, init with one block
+    for (block_size_t i = 1; i < metadata.block_num; i++) {
+        fatable[i] = i + 1;// point to the next block, so that they will be string into a chain
+    }
+    fatable[metadata.block_num -1] = metadata.block_num - 1;// end of the chain
+    sync_fatable();
+}
+
+void sync_fatable()
+{
     if (lseek(fatable_fd, sizeof(metadata), SEEK_SET) == -1) {
-        perror("load_fatable() lseek");
+        perror("sync_fatable() lseek");
         exit(1);
     }
     for (block_size_t i = 0; i < metadata.block_num; i++) {
-        blockid_data_t blockdata;
-        if (i == 0) {
-            blockdata = 0;// root dir, init with one block
-        } else if (i + 1 == metadata.block_num) {
-            blockdata = i;// end of the chain
-        } else {
-            blockdata = i + 1;// point to the next block, so that they will be string into a chain
-        }
-        if (write(fatable_fd, &blockdata, sizeof(blockdata)) == -1) {
-            perror("create_fatable() write");
+        if (write(fatable_fd, fatable + i, sizeof(fatable[i])) == -1) {
+            perror("sync_fatable() write");
             exit(1);
         }
     }

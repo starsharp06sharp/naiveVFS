@@ -29,6 +29,12 @@ void load_fatable(const char *path);
 void create_fatable(const char *path);
 
 /*
+    write current fatable to disk
+    (doesn't include metadata)
+*/
+void sync_fatable();
+
+/*
     write current fatable's metadata to disk
 */
 void sync_fatable_metadata(void);
