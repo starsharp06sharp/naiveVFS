@@ -35,14 +35,8 @@ void create_fatable(const char *path);
 
 /*
     write current fatable to disk
-    (doesn't include metadata)
 */
 void sync_fatable(void);
-
-/*
-    write current fatable's metadata to disk
-*/
-void sync_fatable_metadata(void);
 
 /*
     get next block id by current id

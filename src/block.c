@@ -78,7 +78,6 @@ void create_fatable(const char *path)
     metadata.block_num = INIT_BLOCK_NUM;
     metadata.first_free_block_id = 1;// 0 is root directory file
     metadata.free_block_num = metadata.block_num - 1;
-    sync_fatable_metadata();
     fatable[0] = 0;// root dir, init with one block
     for (block_size_t i = 1; i < metadata.block_num; i++) {
         fatable[i] = i + 1;// point to the next block, so that they will be string into a chain
@@ -92,8 +91,12 @@ void sync_fatable(void)
     pthread_rwlock_rdlock(&fatable_mem_lock);
     pthread_mutex_lock(&fatable_file_lock);
 
-    if (lseek(fatable_fd, sizeof(metadata), SEEK_SET) == -1) {
+    if (lseek(fatable_fd, 0, SEEK_SET) == -1) {
         perror("sync_fatable() lseek");
+        exit(1);
+    }
+    if (write(fatable_fd, &metadata, sizeof(metadata)) == -1) {
+        perror("sync_fatable() write");
         exit(1);
     }
     for (block_size_t i = 0; i < metadata.block_num; i++) {
@@ -101,21 +104,6 @@ void sync_fatable(void)
             perror("sync_fatable() write");
             exit(1);
         }
-    }
-
-    pthread_mutex_unlock(&fatable_file_lock);
-    pthread_rwlock_unlock(&fatable_mem_lock);
-}
-
-void sync_fatable_metadata(void)
-{
-    // FIME: there is no need to sync metadata independently
-    pthread_rwlock_rdlock(&fatable_mem_lock);
-    pthread_mutex_lock(&fatable_file_lock);
-
-    if (pwrite(fatable_fd, &metadata, sizeof(metadata), 0) == -1) {
-        perror("sync_fatable_metadata() pwrite");
-        exit(1);
     }
 
     pthread_mutex_unlock(&fatable_file_lock);
