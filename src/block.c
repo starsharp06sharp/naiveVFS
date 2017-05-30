@@ -198,6 +198,19 @@ void release_block_chain(block_size_t head)
     pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
+void merge_block_chain(block_size_t head1, block_size_t head2)
+{
+    pthread_rwlock_wrlock(&fatable_mem_lock);
+
+    block_size_t tail1 = head1, next1;
+    while((next1 = get_next_block_id(tail1, false)) != tail1) {
+        tail1 = next1;
+    }
+    fatable[tail1] = head2;
+
+    pthread_rwlock_unlock(&fatable_mem_lock);
+}
+
 void open_blockfile(const char *path)
 {
     blockfile_fd = open(path, O_RDWR);

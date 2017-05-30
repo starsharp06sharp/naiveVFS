@@ -57,6 +57,11 @@ block_size_t acquire_block_chain(block_size_t size);
 void release_block_chain(block_size_t head);
 
 /*
+    merge the head2 chain to the tail of the head1 chain
+*/
+void merge_block_chain(block_size_t head1, block_size_t head2);
+
+/*
     open the blockfile in the given path
     if doesn't exist, create it
 */
