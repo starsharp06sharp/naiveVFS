@@ -2,6 +2,7 @@
 #define BLOCK_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "base.h"
 
 typedef uint32_t block_size_t;
