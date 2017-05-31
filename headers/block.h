@@ -40,11 +40,11 @@ void create_fatable(const char *path);
 void sync_fatable(void);
 
 /*
-    get next block id by current id
-    will exit if `id` and `fatable[id]` is out of range
-    need_lock should be fasle if you have lock the mem_lock already
+    get next n block's id
+    if the block is not enough, return the same value as id
+    n should greater than 0
 */
-block_size_t get_next_block_id(block_size_t id, bool need_lock);
+block_size_t get_n_next_block_id(block_size_t id, size_t n);
 
 /*
     acquire a block chian

@@ -19,6 +19,12 @@ pthread_mutex_t fatable_file_lock;
 
 int blockfile_fd;
 
+/*
+    get next block id by current id
+    will exit if `id` and `fatable[id]` is out of range
+*/
+block_size_t get_next_block_id(block_size_t id);
+
 void init_block_module(void)
 {
     pthread_rwlock_init(&fatable_mem_lock, NULL);
@@ -110,12 +116,8 @@ void sync_fatable(void)
     pthread_rwlock_unlock(&fatable_mem_lock);
 }
 
-block_size_t get_next_block_id(block_size_t id, bool need_lock)
+block_size_t get_next_block_id(block_size_t id)
 {
-    if (need_lock) {
-        pthread_rwlock_rdlock(&fatable_mem_lock);
-    }
-
     block_size_t res;
     if (id >= metadata.block_num) {
         printerrf("get_next_block_id(): block_id(%ud) out of range\n", (unsigned int) id);
@@ -126,10 +128,26 @@ block_size_t get_next_block_id(block_size_t id, bool need_lock)
         printerrf("get_next_block_id(): bad fatable[%ud]=%ud\n", (unsigned int) id, (unsigned int) res);
         exit(1);
     }
+    return res;
+}
 
-    if (need_lock) {
-        pthread_rwlock_unlock(&fatable_mem_lock);
+block_size_t get_n_next_block_id(block_size_t id, size_t n)
+{
+    pthread_rwlock_rdlock(&fatable_mem_lock);
+
+    block_size_t now_id = id, next_id, res;
+    while (n-- > 0) {
+        next_id = get_next_block_id(now_id);
+        if (next_id == now_id) {
+            //do not have enough block
+            res = id;
+            break;
+        }
+        now_id = next_id;
     }
+    res = now_id;
+
+    pthread_rwlock_unlock(&fatable_mem_lock);
 
     return res;
 }
@@ -170,9 +188,9 @@ block_size_t acquire_block_chain(block_size_t size)
     }
     head = tail = metadata.first_free_block_id;
     for (block_size_t i = 1; i < size; i++) {
-        tail = get_next_block_id(tail, false);
+        tail = get_next_block_id(tail);
     }
-    metadata.first_free_block_id = get_next_block_id(tail, false);
+    metadata.first_free_block_id = get_next_block_id(tail);
     metadata.free_block_num -= size;
     fatable[tail] = tail;// point to it self, mark it as the tail
 
@@ -186,7 +204,7 @@ void release_block_chain(block_size_t head)
     pthread_rwlock_wrlock(&fatable_mem_lock);
 
     block_size_t tail = head, size = 1, next;
-    while((next = get_next_block_id(tail, false)) != tail) {
+    while((next = get_next_block_id(tail)) != tail) {
         tail = next;
         size++;
     }
@@ -202,7 +220,7 @@ void merge_block_chain(block_size_t head1, block_size_t head2)
     pthread_rwlock_wrlock(&fatable_mem_lock);
 
     block_size_t tail1 = head1, next1;
-    while((next1 = get_next_block_id(tail1, false)) != tail1) {
+    while((next1 = get_next_block_id(tail1)) != tail1) {
         tail1 = next1;
     }
     fatable[tail1] = head2;
