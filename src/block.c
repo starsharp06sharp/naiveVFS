@@ -135,21 +135,19 @@ block_size_t get_n_next_block_id(block_size_t id, size_t n)
 {
     pthread_rwlock_rdlock(&fatable_mem_lock);
 
-    block_size_t now_id = id, next_id, res;
+    block_size_t now_id = id, next_id;
     while (n-- > 0) {
         next_id = get_next_block_id(now_id);
         if (next_id == now_id) {
-            //do not have enough block
-            res = id;
-            break;
+            printerrf("get_n_next_block_id(): do not have engouh block\n");
+            exit(1);
         }
         now_id = next_id;
     }
-    res = now_id;
 
     pthread_rwlock_unlock(&fatable_mem_lock);
 
-    return res;
+    return now_id;
 }
 
 void expand_fatable(void)
@@ -261,7 +259,7 @@ void read_block(block_size_t id, uint8_t *buf)
     }
 }
 
-void write_block(block_size_t id, uint8_t *buf)
+void write_block(block_size_t id, const uint8_t *buf)
 {
     if (pwrite(blockfile_fd, buf, BLOCK_SIZE, (off_t)id * BLOCK_SIZE) == -1) {
         perror("write_block() pwrite");

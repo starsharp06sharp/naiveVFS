@@ -83,6 +83,6 @@ void read_block(block_size_t id, uint8_t *buf);
     write a block of data
     assume buf has at least BLOCK_SIZE bytes of data
 */
-void write_block(block_size_t id, uint8_t *buf);
+void write_block(block_size_t id, const uint8_t *buf);
 
 #endif

@@ -8,6 +8,9 @@ all: $(targets)
 block.o: src/block.c headers/block.h
 	$(CC) -c $< -o $@ $(CFLAGS)
 
+file.o: src/file.c headers/file.h
+	$(CC) -c $< -o $@ $(CFLAGS)
+
 clean:
 	rm -f *.o
 	rm -r $(targets)
