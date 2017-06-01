@@ -18,6 +18,8 @@ struct fatable_metadata {
 #define INIT_BLOCK_NUM 1024
 #define MAGNIFICATION 1.5
 
+extern bool need_init_rootdir;
+
 /*
     initial this module
 */

@@ -19,6 +19,8 @@ pthread_mutex_t fatable_file_lock;
 
 int blockfile_fd;
 
+bool need_init_rootdir = false;
+
 /*
     get next block id by current id
     will exit if `id` and `fatable[id]` is out of range
@@ -246,7 +248,7 @@ void create_blockfile(const char *path)
         perror("create_blockfile() open");
         exit(1);
     }
-    // TODO: write rootdir file correctly
+    need_init_rootdir = true;
 }
 
 void read_block(block_size_t id, uint8_t *buf)
