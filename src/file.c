@@ -231,11 +231,20 @@ void read_dir(fileno_t fileno, struct dir_record *dest)
 void destruct_dir_record(struct dir_record *rec)
 {
     free(rec->list_first_block_id);
-    for (file_count_t i = 0; i < rec->file_count; i++)
-    {
+    for (file_count_t i = 0; i < rec->file_count; i++) {
         free(rec->list_filename[i]);
     }
     free(rec->list_filename);
+}
+
+file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec)
+{
+    for (file_count_t i = 0; i < rec->file_count; i++) {
+        if (strcmp(name, rec->list_filename[i]) == 0) {
+            return i;
+        }
+    }
+    return FILE_COUNT_MAX;
 }
 
 void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)

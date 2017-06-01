@@ -9,6 +9,7 @@ typedef int32_t fileno_t;
 typedef uint32_t file_size_t;
 typedef uint32_t file_mode_t;
 typedef uint32_t file_count_t;
+#define FILE_COUNT_MAX UINT32_MAX
 struct file_metadata {
     block_size_t first_block_id;
     block_size_t block_count;
@@ -101,6 +102,13 @@ void read_dir(fileno_t fileno, struct dir_record *dest);
     destruct any dynamic alloc memory in  dir_record
 */
 void destruct_dir_record(struct dir_record *rec);
+
+/*
+    find file name in dir_record
+    returns the index in dirrecord
+    if mismatch returns FILE_COUNT_MAX
+*/
+file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec);
 
 /*
     create a file in the given dir(given by fileno)
