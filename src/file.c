@@ -9,8 +9,6 @@
 struct file_metadata metadatas[FILENO_TABLE_SIZE];
 bool occupied[FILENO_TABLE_SIZE];
 
-// TODO: 加入基本检查（如fileno是否存在等）， 加入锁
-
 block_size_t get_blockno(file_size_t offset)
 {
     file_size_t real_offset = offset + FILE_METADATA_OFFSET;
@@ -39,6 +37,11 @@ void release_fileno(fileno_t fileno)
     occupied[fileno] = false;
 }
 
+bool file_opened(fileno_t fileno)
+{
+    return occupied[fileno];
+}
+
 fileno_t open_file(block_size_t first_block_id)
 {
     uint8_t block_buf[BLOCK_SIZE];
@@ -58,12 +61,14 @@ fileno_t open_file(block_size_t first_block_id)
 
 void close_file(fileno_t fileno)
 {
+    assert_fileno_valid(fileno);
     sync_file_metadata(fileno);
     release_fileno(fileno);
 }
 
 void sync_file_metadata(fileno_t fileno)
 {
+    assert_fileno_valid(fileno);
     uint8_t block_buf[BLOCK_SIZE];
     read_block(metadatas[fileno].first_block_id, block_buf);
     memcpy(block_buf, metadatas + fileno, sizeof(metadatas[fileno]));
@@ -81,11 +86,13 @@ void sync_all_metadatas(void)
 
 void get_metadata(fileno_t fileno, struct file_metadata *buf)
 {
+    assert_fileno_valid(fileno);
     memcpy(buf, metadatas + fileno, sizeof(*buf));
 }
 
 int read_file(fileno_t fileno, uint8_t *buf, file_size_t size, file_size_t offset)
 {
+    assert_fileno_valid(fileno);
     uint8_t block_buf[BLOCK_SIZE];
     struct file_metadata *file_info = metadatas + fileno;
     block_size_t start_blockno, end_blockno;
@@ -136,6 +143,7 @@ int read_file(fileno_t fileno, uint8_t *buf, file_size_t size, file_size_t offse
 
 int write_file(fileno_t fileno, const uint8_t *buf, file_size_t size, file_size_t offset)
 {
+    assert_fileno_valid(fileno);
     uint8_t block_buf[BLOCK_SIZE];
     struct file_metadata *file_info = metadatas + fileno;
     block_size_t start_blockno, end_blockno;
@@ -191,6 +199,7 @@ int write_file(fileno_t fileno, const uint8_t *buf, file_size_t size, file_size_
 
 void read_dir(fileno_t fileno, struct dir_record *dest)
 {
+    assert_fileno_valid(fileno);
     int filename_len;
     struct file_metadata *file_info = metadatas + fileno;
     if (file_info->mode != MODE_ISDIR) {
@@ -221,6 +230,7 @@ void read_dir(fileno_t fileno, struct dir_record *dest)
 
 void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
 {
+    assert_fileno_valid(dir_fileno);
     int filename_len = strlen(filename) + 1;
     uint8_t buf[sizeof(block_size_t) + filename_len];
     fileno_t fileno = acquire_fileno();
@@ -241,6 +251,7 @@ void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
 
 void init_empty_dir(fileno_t fileno, block_size_t block_id, block_size_t father_block_id)
 {
+    assert_fileno_valid(fileno);
     uint8_t buf[EMPTY_DIR_SIZE];
     int buf_off = 0;
     file_count_t c = 2;

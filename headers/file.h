@@ -33,6 +33,12 @@ struct dir_record {
 
 #define FILENO_TABLE_SIZE 65536
 
+#define assert_fileno_valid(fileno) \
+    if (!file_opened(fileno)) { \
+        printerrf("%s(): invalid fileno: %d\n", __FUNCTION__, (int) fileno); \
+        exit(1); \
+    }
+
 /*
     get a unused fileno
 */
@@ -42,6 +48,11 @@ fileno_t acquire_fileno(void);
     release a fileno
 */
 void release_fileno(fileno_t fileno);
+
+/*
+    check if file is opened
+*/
+bool file_opened(fileno_t fileno);
 
 /*
     open file from the given block_id
