@@ -98,6 +98,11 @@ int write_file(fileno_t fileno, const uint8_t *buf, file_size_t size, file_size_
 void read_dir(fileno_t fileno, struct dir_record *dest);
 
 /*
+    destruct any dynamic alloc memory in  dir_record
+*/
+void destruct_dir_record(struct dir_record *rec);
+
+/*
     create a file in the given dir(given by fileno)
     if it is a dir,create 2 default dir . and .. in it
 */

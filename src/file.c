@@ -228,6 +228,16 @@ void read_dir(fileno_t fileno, struct dir_record *dest)
     }
 }
 
+void destruct_dir_record(struct dir_record *rec)
+{
+    free(rec->list_first_block_id);
+    for (file_count_t i = 0; i < rec->file_count; i++)
+    {
+        free(rec->list_filename[i]);
+    }
+    free(rec->list_filename);
+}
+
 void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
 {
     assert_fileno_valid(dir_fileno);
