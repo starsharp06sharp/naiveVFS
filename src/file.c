@@ -70,6 +70,15 @@ void sync_file_metadata(fileno_t fileno)
     write_block(metadatas[fileno].first_block_id, block_buf);
 }
 
+void sync_all_metadatas(void)
+{
+    for (fileno_t i = 0; i < FILENO_TABLE_SIZE; i++) {
+        if (occupied[i]) {
+            sync_file_metadata(i);
+        }
+    }
+}
+
 void get_metadata(fileno_t fileno, struct file_metadata *buf)
 {
     memcpy(buf, metadatas + fileno, sizeof(*buf));
@@ -83,7 +92,6 @@ int read_file(fileno_t fileno, uint8_t *buf, file_size_t size, file_size_t offse
     file_size_t start_inblock_offset, end_inblock_offset;
     file_size_t end_offset;
     file_info->access_time = time(NULL);
-    sync_file_metadata(fileno);
     if (offset >= file_info->file_size) {
         return 0;
     }
@@ -146,8 +154,8 @@ int write_file(fileno_t fileno, const uint8_t *buf, file_size_t size, file_size_
             merge_block_chain(file_info->first_block_id, new_chain_head);
             file_info->block_count = end_blockno + 1;
         }
+        sync_file_metadata(fileno);
     }
-    sync_file_metadata(fileno);    
     if (start_blockno == end_blockno) {
         block_size_t blockid = get_n_next_block_id(file_info->first_block_id, start_blockno);
         read_block(blockid, block_buf);

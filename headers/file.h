@@ -61,6 +61,11 @@ void close_file(fileno_t fileno);
 void sync_file_metadata(fileno_t fileno);
 
 /*
+    sync all opened file's metadata
+*/
+void sync_all_metadatas(void);
+
+/*
     copy the files metadata to the given buf
 */
 void get_metadata(fileno_t fileno, struct file_metadata *buf);
