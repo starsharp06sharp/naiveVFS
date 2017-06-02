@@ -9,6 +9,18 @@
 struct file_metadata metadatas[FILENO_TABLE_SIZE];
 bool occupied[FILENO_TABLE_SIZE];
 
+void init_file_module(void)
+{
+    memset(occupied, 0, sizeof(occupied));
+    open_file(0);// rootdir fileno is always 0
+    if (need_init_rootdir) {
+        need_init_rootdir = false;
+        init_empty_dir(0, 0, 0);
+        metadatas[0].create_time = metadatas[0].modify_time;
+        sync_file_metadata(0);
+    }
+}
+
 block_size_t get_blockno(file_size_t offset)
 {
     file_size_t real_offset = offset + FILE_METADATA_OFFSET;

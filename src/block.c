@@ -31,6 +31,9 @@ void init_block_module(void)
 {
     pthread_rwlock_init(&fatable_mem_lock, NULL);
     pthread_mutex_init(&fatable_file_lock, NULL);
+
+    load_fatable(FATABLE_FILENAME);
+    open_blockfile(BLOCKFILE_FILENAME);
 }
 
 void load_fatable(const char *path)

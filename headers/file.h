@@ -41,6 +41,12 @@ struct dir_record {
     }
 
 /*
+    init this module
+    include open rootdir(fileno is always 0)
+*/
+void init_file_module(void);
+
+/*
     get a unused fileno
 */
 fileno_t acquire_fileno(void);
