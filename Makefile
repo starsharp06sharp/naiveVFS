@@ -15,7 +15,7 @@ main.o: src/main.c headers/base.h headers/block.h headers/file.h
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 naivefs: block.o file.o main.o
-	$(CC) $? -o $@ $(LDFLAGS)
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm -f *.o
