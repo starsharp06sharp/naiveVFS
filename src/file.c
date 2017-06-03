@@ -7,7 +7,7 @@
 #include "file.h"
 
 struct file_metadata metadatas[FILENO_TABLE_SIZE];
-bool occupied[FILENO_TABLE_SIZE];
+int occupied[FILENO_TABLE_SIZE];//fileno's reference count
 
 void init_file_module(void)
 {
@@ -17,6 +17,7 @@ void init_file_module(void)
         need_init_rootdir = false;
         init_empty_dir(0, 0, 0);
         metadatas[0].create_time = metadatas[0].modify_time;
+        metadatas[0].mode = MODE_ISDIR;
         sync_file_metadata(0);
     }
 }
@@ -37,7 +38,7 @@ fileno_t acquire_fileno(void)
 {
     for (fileno_t i = 0; i < FILENO_TABLE_SIZE; i++) {
         if (!occupied[i]) {
-            occupied[i] = true;
+            occupied[i] = 1;
             return i;
         }
     }
@@ -46,7 +47,7 @@ fileno_t acquire_fileno(void)
 
 void release_fileno(fileno_t fileno)
 {
-    occupied[fileno] = false;
+    occupied[fileno] = 0;
 }
 
 bool file_opened(fileno_t fileno)
@@ -56,6 +57,11 @@ bool file_opened(fileno_t fileno)
 
 fileno_t open_file(block_size_t first_block_id)
 {
+    for (fileno_t i = 0; i < FILENO_TABLE_SIZE; i++)
+        if (file_opened(i) && metadatas[i].first_block_id == first_block_id) {
+            occupied[i]++;
+            return i;
+        }
     uint8_t block_buf[BLOCK_SIZE];
     read_block(first_block_id, block_buf);
     fileno_t fileno = acquire_fileno();
@@ -73,9 +79,13 @@ fileno_t open_file(block_size_t first_block_id)
 
 void close_file(fileno_t fileno)
 {
-    assert_fileno_valid(fileno);
-    sync_file_metadata(fileno);
-    release_fileno(fileno);
+    if (occupied[fileno] > 1) {
+        occupied[fileno]--;
+    } else {
+        assert_fileno_valid(fileno);
+        sync_file_metadata(fileno);
+        release_fileno(fileno);
+    }
 }
 
 void sync_file_metadata(fileno_t fileno)
@@ -99,7 +109,13 @@ void sync_all_metadatas(void)
 void get_metadata(fileno_t fileno, struct file_metadata *buf)
 {
     assert_fileno_valid(fileno);
-    memcpy(buf, metadatas + fileno, sizeof(*buf));
+    *buf = metadatas[fileno];
+}
+
+void set_metadata(fileno_t fileno, struct file_metadata *src)
+{
+    metadatas[fileno] = *src;
+    sync_file_metadata(fileno);
 }
 
 int read_file(fileno_t fileno, uint8_t *buf, file_size_t size, file_size_t offset)
@@ -209,6 +225,22 @@ int write_file(fileno_t fileno, const uint8_t *buf, file_size_t size, file_size_
     return end_offset - offset;
 }
 
+bool cut_file(fileno_t fileno, file_size_t size)
+{
+    struct file_metadata *file_info = metadatas + fileno;
+    if (size > file_info->file_size) {
+        return false;
+    }
+    block_size_t new_block_count = get_blockno(size) + 1;
+    if (new_block_count < file_info->block_count) {
+        cut_block_chain_at(file_info->first_block_id, new_block_count);
+        file_info->block_count = new_block_count;
+    }
+    file_info->file_size = size;
+    sync_file_metadata(fileno);
+    return true;
+}
+
 void read_dir(fileno_t fileno, struct dir_record *dest)
 {
     assert_fileno_valid(fileno);
@@ -223,6 +255,7 @@ void read_dir(fileno_t fileno, struct dir_record *dest)
     memcpy(&dest->file_count, raw_buf_pos, sizeof(file_count_t));
     raw_buf_pos += sizeof(file_count_t);
 
+    dest->dir_fileno = fileno;
     dest->list_first_block_id = malloc(dest->file_count * sizeof(block_size_t));
     dest->list_filename = malloc(dest->file_count * sizeof(char *));
     for (file_count_t i = 0; i < dest->file_count; i++) {
@@ -247,6 +280,9 @@ void destruct_dir_record(struct dir_record *rec)
         free(rec->list_filename[i]);
     }
     free(rec->list_filename);
+    if (rec->dir_fileno != 0) {
+        close_file(rec->dir_fileno);
+    }
 }
 
 file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec)
@@ -274,6 +310,10 @@ void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
     memcpy(buf, &fileinfo->first_block_id, sizeof(block_size_t));
     memcpy(buf + sizeof(block_size_t), filename, filename_len);
     write_file(dir_fileno, buf, sizeof(buf), metadatas[dir_fileno].file_size);// write info in dir
+    file_count_t count;
+    read_file(dir_fileno, (uint8_t *) &count, sizeof(file_count_t), 0);
+    count++;
+    write_file(dir_fileno, (uint8_t *) &count, sizeof(file_count_t), 0);
     if (is_dir) {
         init_empty_dir(fileno, fileinfo->first_block_id, metadatas[dir_fileno].first_block_id);
     }

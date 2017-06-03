@@ -55,9 +55,10 @@ block_size_t get_n_next_block_id(block_size_t id, size_t n);
 block_size_t acquire_block_chain(block_size_t size);
 
 /*
-    release a block chian to the free block chain
+    cut the block chain into two parts, and release the second part
+    n is the block count of the first chain
 */
-void release_block_chain(block_size_t head);
+void cut_block_chain_at(block_size_t head, size_t n);
 
 /*
     merge the head2 chain to the tail of the head1 chain

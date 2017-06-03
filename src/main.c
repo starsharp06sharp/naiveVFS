@@ -1,59 +1,251 @@
 #define FUSE_USE_VERSION 26
 
 #include <fuse.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
 #include "base.h"
 #include "block.h"
 #include "file.h"
+#include "path.h"
 
 static void *naive_init(struct fuse_conn_info *conn)
 {
-    
+    init_block_module();
+    init_file_module();
+    return NULL;
 }
 
 static void naive_destroy(void * op)
 {
-
+    sync_all_metadatas();
+    sync_fatable();
 }
 
-static int naive_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *info)
+static int naive_readdir(const char *_path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *info)
 {
+    struct dir_record dir;
+    int pathlen = strlen(_path);
+    char path[pathlen + 2];
+    strcpy(path, _path);
+    if (path[pathlen - 1] != '/') {
+        path[pathlen] = '/';
+        path[++pathlen] = '\0';
+    }
+    if (read_dir_recursively(path, &dir) == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if(filler(buf, dir.list_filename[i], NULL, 0)) {
+            break;
+        }
+    }
+    return 0;
+}
 
+static int naive_getattr(const char *_path, struct stat *st)
+{
+    struct dir_record dir;
+    struct file_metadata md;
+    int pathlen = strlen(_path);
+    char path[pathlen + 1];
+    strcpy(path, _path);
+    if (path[pathlen - 1] == '/') {
+        if (pathlen == 1) {
+            // root dir
+            get_metadata(0, &md);
+            st->st_mode = S_IFDIR | 0777;
+            st->st_nlink = 2;
+            st->st_atim = (struct timespec) {md.access_time, 0};
+            st->st_mtim = (struct timespec) {md.modify_time, 0};
+            st->st_ctim = (struct timespec) {md.create_time, 0};
+            return 0;
+        } else {
+            path[--pathlen] = '\0';
+        }
+    }
+    int last_slash_i = read_dir_recursively(path, &dir);
+    char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if (strcmp(filename, dir.list_filename[i]) == 0) {
+            fileno_t fn = open_file(dir.list_first_block_id[i]);
+            get_metadata(fn, &md);
+            if (md.mode == MODE_ISDIR) {
+                st->st_mode = S_IFDIR | 0777;
+                st->st_nlink = 2;
+            } else if (md.mode == MODE_ISREG) {
+                st->st_mode = S_IFREG | 0777;
+                st->st_nlink = 1;
+                st->st_size = md.file_size;
+            }
+            st->st_atim = (struct timespec) {md.access_time, 0};
+            st->st_mtim = (struct timespec) {md.modify_time, 0};
+            st->st_ctim = (struct timespec) {md.create_time, 0};
+            close_file(fn);
+            destruct_dir_record(&dir);
+            return 0;
+        }
+    }
+    destruct_dir_record(&dir);
+    return -ENOENT;
+}
+
+static int naive_utimens(const char *_path, const struct timespec ts[2])
+{
+    struct dir_record dir;
+    struct file_metadata md;
+    int pathlen = strlen(_path);
+    char path[pathlen + 1];
+    strcpy(path, _path);
+    if (path[pathlen - 1] == '/') {
+        if (pathlen == 1) {
+            // root dir
+            get_metadata(0, &md);
+            md.access_time = ts[0].tv_sec;
+            md.modify_time = ts[1].tv_sec;
+            set_metadata(0, &md);
+            return 0;
+        } else {
+            path[--pathlen] = '\0';
+        }
+    }
+    int last_slash_i = read_dir_recursively(path, &dir);
+    char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if (strcmp(filename, dir.list_filename[i]) == 0) {
+            fileno_t fn = open_file(dir.list_first_block_id[i]);
+            get_metadata(fn, &md);
+            md.access_time = ts[0].tv_sec;
+            md.modify_time = ts[1].tv_sec;
+            set_metadata(fn, &md);
+            close_file(fn);
+            destruct_dir_record(&dir);
+            return 0;
+        }
+    }
+    destruct_dir_record(&dir);
+    return -ENOENT;
 }
 
 static int naive_open(const char *path, struct fuse_file_info *info)
 {
-
+    struct dir_record dir;
+    int last_slash_i = read_dir_recursively(path, &dir);
+    const char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if (strcmp(filename, dir.list_filename[i]) == 0) {
+            fileno_t fn = open_file(dir.list_first_block_id[i]);
+            info->fh = fn;
+            destruct_dir_record(&dir);
+            return 0;
+        }
+    }
+    destruct_dir_record(&dir);
+    return -ENOENT;
 }
 
 static int naive_release(const char *path, struct fuse_file_info *info)
 {
-
+    if (!file_opened(info->fh)) {
+        return -EBADF;
+    }
+    close_file(info->fh);
+    return 0;
 }
 
 static int naive_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *info)
 {
-
+    if (!file_opened(info->fh)) {
+        return -EBADF;
+    }
+    return read_file(info->fh, (uint8_t *) buf, size, offset);
 }
 
 static int naive_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *info)
 {
-
+    if (!file_opened(info->fh)) {
+        return -EBADF;
+    }
+    return write_file(info->fh, (uint8_t *) buf, size, offset);
 }
 
 static int naive_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+    if (!S_ISREG(mode)) {
+        return -EINVAL;
+    }
+    struct dir_record dir;
+    int last_slash_i = read_dir_recursively(path, &dir);
+    const char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if (strcmp(filename, dir.list_filename[i]) == 0) {
+            destruct_dir_record(&dir);
+            return -EEXIST;
+        }
+    }
+    create_file(dir.dir_fileno, filename, false);
+    return 0;
+}
 
+static int naive_truncate(const char *path, off_t size)
+{
+    int pathlen = strlen(path);
+    if (size < 0) return -EINVAL;
+    if (path[pathlen - 1] == '/') return -EISDIR;
+    struct dir_record dir;
+    int last_slash_i = read_dir_recursively(path, &dir);
+    const char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if (strcmp(filename, dir.list_filename[i]) == 0) {
+            fileno_t fn = open_file(dir.list_first_block_id[i]);
+            int res;
+            if (cut_file(fn, size)) {
+                res = 0;
+            } else {
+                res = -EFBIG;
+            }
+            close_file(fn);
+            destruct_dir_record(&dir);
+            return res;
+        }
+    }
+    destruct_dir_record(&dir);
+    return -ENOENT;
 }
 
 static struct fuse_operations naivefs_oper = {
     .init = naive_init,
     .destroy = naive_destroy,
     .readdir = naive_readdir,
+    .getattr = naive_getattr,
+    .utimens = naive_utimens,
     .open = naive_open,
     .release = naive_release,
     .read = naive_read,
     .write = naive_write,
-    .mknod = naive_mknod
+    .mknod = naive_mknod,
+    .truncate = naive_truncate
 };
 
 int main(int argc, char *argv[])

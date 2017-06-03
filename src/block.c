@@ -27,6 +27,11 @@ bool need_init_rootdir = false;
 */
 block_size_t get_next_block_id(block_size_t id);
 
+/*
+    release a block chian to the free block chain
+*/
+void release_block_chain(block_size_t head);
+
 void init_block_module(void)
 {
     pthread_rwlock_init(&fatable_mem_lock, NULL);
@@ -204,8 +209,6 @@ block_size_t acquire_block_chain(block_size_t size)
 
 void release_block_chain(block_size_t head)
 {
-    pthread_rwlock_wrlock(&fatable_mem_lock);
-
     block_size_t tail = head, size = 1, next;
     while((next = get_next_block_id(tail)) != tail) {
         tail = next;
@@ -214,6 +217,16 @@ void release_block_chain(block_size_t head)
     fatable[tail] = metadata.first_free_block_id;
     metadata.first_free_block_id = head;
     metadata.free_block_num += size;
+}
+
+void cut_block_chain_at(block_size_t head, size_t n)
+{
+    block_size_t tail = get_n_next_block_id(head, n - 1);
+
+    pthread_rwlock_wrlock(&fatable_mem_lock);
+
+    release_block_chain(get_next_block_id(tail));
+    fatable[tail] = tail;// let the chain 1 be tail
 
     pthread_rwlock_unlock(&fatable_mem_lock);
 }

@@ -11,10 +11,13 @@ block.o: src/block.c headers/block.h
 file.o: src/file.c headers/file.h
 	$(CC) -c $< -o $@ $(CFLAGS)
 
+path.o: src/path.c headers/path.h
+	$(CC) -c $< -o $@ $(CFLAGS)
+
 main.o: src/main.c headers/base.h headers/block.h headers/file.h
 	$(CC) -c $< -o $@ $(CFLAGS)
 
-naivefs: block.o file.o main.o
+naivefs: block.o file.o path.o main.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:

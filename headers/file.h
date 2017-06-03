@@ -24,6 +24,7 @@ struct dir_record {
     file_count_t file_count;
     block_size_t *list_first_block_id;
     char **list_filename;
+    fileno_t dir_fileno;
 };
 
 #define MODE_ISDIR 1
@@ -89,6 +90,11 @@ void sync_all_metadatas(void);
 void get_metadata(fileno_t fileno, struct file_metadata *buf);
 
 /*
+    set metadata from src
+*/
+void set_metadata(fileno_t fileno, struct file_metadata *src);
+
+/*
     read a file like pread
 */
 int read_file(fileno_t fileno, uint8_t *buf, file_size_t size, file_size_t offset);
@@ -98,6 +104,12 @@ int read_file(fileno_t fileno, uint8_t *buf, file_size_t size, file_size_t offse
 */
 int write_file(fileno_t fileno, const uint8_t *buf, file_size_t size, file_size_t offset);
 
+
+/*
+    cut the file to into a smaller size
+    return the size is valid or not
+*/
+bool cut_file(fileno_t fileno, file_size_t size);
 /*
     read dir info to dest
     assume dest is valid
