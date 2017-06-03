@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <locale.h>
 #include "base.h"
 #include "block.h"
 #include "file.h"
@@ -299,5 +300,6 @@ static struct fuse_operations naivefs_oper = {
 
 int main(int argc, char *argv[])
 {
+    setlocale(LC_ALL, "en_US.UTF-8");
     return fuse_main(argc, argv, &naivefs_oper, NULL);
 }
