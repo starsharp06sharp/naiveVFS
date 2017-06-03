@@ -41,6 +41,14 @@ void init_block_module(void)
     open_blockfile(BLOCKFILE_FILENAME);
 }
 
+block_size_t get_used_block_num(void)
+{
+    pthread_rwlock_rdlock(&fatable_mem_lock);
+    block_size_t res = metadata.block_num - metadata.free_block_num;
+    pthread_rwlock_unlock(&fatable_mem_lock);
+    return res;
+}
+
 void load_fatable(const char *path)
 {
     ssize_t nbytes;

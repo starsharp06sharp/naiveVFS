@@ -15,7 +15,7 @@ void init_file_module(void)
     open_file(0);// rootdir fileno is always 0
     if (need_init_rootdir) {
         need_init_rootdir = false;
-        init_empty_dir(0, 0, 0);
+        init_empty_dir(0, 0);
         metadatas[0].create_time = metadatas[0].modify_time;
         metadatas[0].mode = MODE_ISDIR;
         sync_file_metadata(0);
@@ -295,7 +295,7 @@ file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec)
     return FILE_COUNT_MAX;
 }
 
-void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
+fileno_t create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
 {
     assert_fileno_valid(dir_fileno);
     int filename_len = strlen(filename) + 1;
@@ -315,15 +315,17 @@ void create_file(fileno_t dir_fileno, const char *filename, bool is_dir)
     count++;
     write_file(dir_fileno, (uint8_t *) &count, sizeof(file_count_t), 0);
     if (is_dir) {
-        init_empty_dir(fileno, fileinfo->first_block_id, metadatas[dir_fileno].first_block_id);
+        init_empty_dir(fileno, metadatas[dir_fileno].first_block_id);
     }
-    close_file(fileno);// sync metadata
+    sync_file_metadata(fileno);
+    return fileno;
 }
 
-void init_empty_dir(fileno_t fileno, block_size_t block_id, block_size_t father_block_id)
+void init_empty_dir(fileno_t fileno, block_size_t father_block_id)
 {
     assert_fileno_valid(fileno);
     uint8_t buf[EMPTY_DIR_SIZE];
+    block_size_t block_id = metadatas[fileno].first_block_id;
     int buf_off = 0;
     file_count_t c = 2;
     memcpy(buf, &c, sizeof(file_count_t));

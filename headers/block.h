@@ -7,6 +7,7 @@
 
 typedef uint32_t block_size_t;
 typedef uint32_t blockid_data_t;
+#define BLOCK_COUNT_MAX UINT32_MAX
 
 struct fatable_metadata {
     block_size_t block_num;
@@ -24,6 +25,11 @@ extern bool need_init_rootdir;
     initial this module
 */
 void init_block_module(void);
+
+/*
+    get used block number
+*/
+block_size_t get_used_block_num(void);
 
 /*
     open and load the fatable in the given path

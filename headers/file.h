@@ -131,13 +131,14 @@ file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec);
 /*
     create a file in the given dir(given by fileno)
     if it is a dir,create 2 default dir . and .. in it
+    return the opened new files fileno
 */
-void create_file(fileno_t dir_fileno, const char *filename, bool is_dir);
+fileno_t create_file(fileno_t dir_fileno, const char *filename, bool is_dir);
 
 /*
     init a empty dir:
     create 2 default dir . and ..
 */
-void init_empty_dir(fileno_t fileno, block_size_t block_id, block_size_t father_block_id);
+void init_empty_dir(fileno_t fileno, block_size_t father_block_id);
 
 #endif

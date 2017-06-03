@@ -22,6 +22,18 @@ static void naive_destroy(void * op)
     sync_fatable();
 }
 
+static int naive_statfs(const char *path, struct statvfs *stfs)
+{
+    // temporary solution
+    stfs->f_bsize = BLOCK_SIZE;
+    stfs->f_frsize = BLOCK_SIZE;
+    stfs->f_blocks = BLOCK_COUNT_MAX;
+    stfs->f_bfree = stfs->f_bavail = BLOCK_COUNT_MAX - get_used_block_num();
+    stfs->f_files = stfs->f_ffree = FILE_COUNT_MAX / 2;
+    stfs->f_namemax = MAX_FILENAME_LEN;
+    return 0;
+}
+
 static int naive_readdir(const char *_path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *info)
 {
     struct dir_record dir;
@@ -41,6 +53,40 @@ static int naive_readdir(const char *_path, void *buf, fuse_fill_dir_t filler, o
             break;
         }
     }
+    return 0;
+}
+
+static int naive_mkdir(const char *_path, mode_t mode)
+{
+    struct dir_record dir;
+    int pathlen = strlen(_path);
+    char path[pathlen];
+    strcpy(path, _path);
+    if (path[pathlen - 1] == '/') {
+        if (pathlen <= 1) {
+            //root dir
+            return -EEXIST;
+        } else {
+            path[pathlen - 1] = '\0';
+            pathlen--;
+        }
+    }
+    int last_slash_i = read_dir_recursively(path, &dir);
+    const char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    for (file_count_t i = 0; i < dir.file_count; i++) {
+        if (strcmp(filename, dir.list_filename[i]) == 0) {
+            destruct_dir_record(&dir);
+            return -EEXIST;
+        }
+    }
+    fileno_t fn;
+    fn = create_file(dir.dir_fileno, filename, true);
+    init_empty_dir(fn, dir.dir_fileno);
+    destruct_dir_record(&dir);
     return 0;
 }
 
@@ -201,6 +247,7 @@ static int naive_mknod(const char *path, mode_t mode, dev_t rdev)
         }
     }
     create_file(dir.dir_fileno, filename, false);
+    destruct_dir_record(&dir);
     return 0;
 }
 
@@ -237,7 +284,9 @@ static int naive_truncate(const char *path, off_t size)
 static struct fuse_operations naivefs_oper = {
     .init = naive_init,
     .destroy = naive_destroy,
+    .statfs = naive_statfs,
     .readdir = naive_readdir,
+    .mkdir = naive_mkdir,
     .getattr = naive_getattr,
     .utimens = naive_utimens,
     .open = naive_open,

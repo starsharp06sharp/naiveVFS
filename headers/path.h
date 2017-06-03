@@ -4,6 +4,8 @@
 #include <string.h>
 #include "file.h"
 
+#define MAX_FILENAME_LEN 255
+
 /*
     find next '/' in path
     return -1 if not found
