@@ -363,6 +363,27 @@ void init_empty_dir(fileno_t fileno, block_size_t father_block_id)
     write_file(fileno, buf, EMPTY_DIR_SIZE, 0);
 }
 
+void add_item_in_dir(struct dir_record *dir, block_size_t first_blockid, const char *name)
+{
+    file_count_t file_count = dir->file_count + 1;
+    block_size_t *list_first_block_id = malloc(file_count * sizeof(block_size_t));
+    char **list_filename = malloc(file_count * sizeof(char *));
+    for (file_count_t i = 0; i < dir->file_count; i++) {
+        list_first_block_id[i] = dir->list_first_block_id[i];
+        list_filename[i] = dir->list_filename[i];
+    }
+    list_first_block_id[file_count - 1] = first_blockid;
+    list_filename[file_count - 1] = malloc((strlen(name) + 1) * sizeof(char));
+    strcpy(list_filename[file_count - 1], name);
+
+    //TODO: release mem manually
+    free(dir->list_first_block_id);
+    free(dir->list_filename);
+    dir->file_count = file_count;
+    dir->list_first_block_id = list_first_block_id;
+    dir->list_filename = list_filename;
+}
+
 void remove_item_in_dir(struct dir_record *dir, file_count_t index)
 {
     free(dir->list_filename[index]);

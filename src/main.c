@@ -297,6 +297,88 @@ static int naive_mknod(const char *path, mode_t mode, dev_t rdev)
     return 0;
 }
 
+static int naive_rename(const char *from, const char *to)
+{
+    if (strcmp(from, to) == 0) {
+        return 0;
+    }
+    struct dir_record fdir, tdir;
+    int fsi, tsi;
+    const char *from_fname, *to_fname;
+    fsi = read_dir_recursively(from, &fdir);
+    tsi = read_dir_recursively(to, &tdir);
+    if (fsi == -1 || tsi == -1) {
+        destruct_dir_record(&fdir);
+        destruct_dir_record(&tdir);
+        return -ENOENT;
+    }
+    from_fname = from + fsi + 1;
+    to_fname = to + tsi + 1;
+    file_count_t ffi, tfi;
+    ffi = find_name_in_dir_record(from_fname, &fdir);
+    if (ffi == FILE_COUNT_MAX) {
+        destruct_dir_record(&fdir);
+        destruct_dir_record(&tdir);
+        return -ENOENT;
+    }
+    tfi = find_name_in_dir_record(to_fname, &tdir);
+    fileno_t fn;
+    if (tfi != FILE_COUNT_MAX) {
+        struct file_metadata ffm, tfm;
+        fn = open_file(fdir.list_first_block_id[ffi]);
+        get_metadata(fn, &ffm);
+        close_file(fn);
+        fn = open_file(tdir.list_first_block_id[tfi]);
+        get_metadata(fn, &tfm);
+        close_file(fn);
+        if (ffm.mode == MODE_ISDIR) {
+            if (tfm.mode == MODE_ISDIR) {
+                fn = open_file(tdir.list_first_block_id[tfi]);
+                struct dir_record tsubdir;
+                read_dir(fn, &tsubdir);
+                destruct_dir_record(&tsubdir);
+
+                if (tsubdir.file_count == 2) {// to is empty
+                    remove_item_in_dir(&tdir, tfi);
+                } else {
+                    destruct_dir_record(&fdir);
+                    destruct_dir_record(&tdir);
+                    return -ENOTEMPTY;
+                }
+            } else {
+                destruct_dir_record(&fdir);
+                destruct_dir_record(&tdir);
+                return -ENOTDIR;
+            }
+        } else {
+            if (tfm.mode == MODE_ISDIR) {
+                destruct_dir_record(&fdir);
+                destruct_dir_record(&tdir);
+                return -EISDIR;
+            } else {
+                remove_item_in_dir(&tdir, tfi);
+            }
+        }
+    }
+    block_size_t fbid = fdir.list_first_block_id[ffi];
+    // TODO: write fdir, if fdir == tdir, sync them at the same time
+    if (fdir.dir_fileno == tdir.dir_fileno) {
+        //they are in the same dir, use tdir
+        ffi = find_name_in_dir_record(from_fname, &tdir);
+        remove_item_in_dir(&tdir, ffi);
+        add_item_in_dir(&tdir, fbid, to_fname);
+        write_dir(&tdir);
+    } else {
+        remove_item_in_dir(&fdir, ffi);
+        write_dir(&fdir);
+        add_item_in_dir(&tdir, fbid, to_fname);
+        write_dir(&tdir);
+    }
+    destruct_dir_record(&fdir);
+    destruct_dir_record(&tdir);
+    return 0;
+}
+
 static int naive_unlink(const char *path)
 {
     struct dir_record dir;
@@ -371,6 +453,7 @@ static struct fuse_operations naivefs_oper = {
     .read = naive_read,
     .write = naive_write,
     .mknod = naive_mknod,
+    .rename = naive_rename,
     .unlink = naive_unlink,
     .truncate = naive_truncate
 };

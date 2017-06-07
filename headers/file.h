@@ -141,6 +141,11 @@ file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec);
 fileno_t create_file(fileno_t dir_fileno, const char *filename, bool is_dir);
 
 /*
+    add a item in dir
+*/
+void add_item_in_dir(struct dir_record *dir, block_size_t first_blockid, const char *name);
+
+/*
     remove a item in dir
 */
 void remove_item_in_dir(struct dir_record *dir, file_count_t index);
