@@ -91,6 +91,51 @@ static int naive_mkdir(const char *_path, mode_t mode)
     return 0;
 }
 
+static int naive_rmdir(const char *_path)
+{
+    int pathlen = strlen(_path);
+    char path[pathlen + 1];
+    strcpy(path, _path);
+    if (path[pathlen - 1] == '/') {
+        path[--pathlen] = '\0';
+    }
+    struct dir_record dir;
+    int last_slash_i = read_dir_recursively(path, &dir);
+    const char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    file_count_t fi = find_name_in_dir_record(filename, &dir);
+    if (fi == FILE_COUNT_MAX) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    fileno_t fn = open_file(dir.list_first_block_id[fi]);
+    struct file_metadata fm;
+    get_metadata(fn, &fm);
+    close_file(fn);
+    int res;
+    if (fm.mode != MODE_ISDIR) {
+        res = -ENOTDIR;
+    } else {
+        fileno_t fn = open_file(dir.list_first_block_id[fi]);
+        struct dir_record subdir;
+        read_dir(fn, &subdir);
+        file_count_t file_count = subdir.file_count;
+        destruct_dir_record(&subdir);
+        if (file_count > 2) {
+            res = -ENOTEMPTY;
+        } else {
+            remove_item_in_dir(&dir, fi);
+            write_dir(&dir);
+            res = 0;
+        }
+    }
+    destruct_dir_record(&dir);
+    return res;
+}
+
 static int naive_getattr(const char *_path, struct stat *st)
 {
     struct dir_record dir;
@@ -252,6 +297,36 @@ static int naive_mknod(const char *path, mode_t mode, dev_t rdev)
     return 0;
 }
 
+static int naive_unlink(const char *path)
+{
+    struct dir_record dir;
+    int last_slash_i = read_dir_recursively(path, &dir);
+    const char *filename = path + last_slash_i + 1;
+    if (last_slash_i == -1) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    file_count_t fi = find_name_in_dir_record(filename, &dir);
+    if (fi == FILE_COUNT_MAX) {
+        destruct_dir_record(&dir);
+        return -ENOENT;
+    }
+    fileno_t fn = open_file(dir.list_first_block_id[fi]);
+    struct file_metadata fm;
+    get_metadata(fn, &fm);
+    close_file(fn);
+    int res;
+    if (fm.mode != MODE_ISREG) {
+        res = -EPERM;
+    } else {
+        remove_item_in_dir(&dir, fi);
+        write_dir(&dir);
+        res = 0;
+    }
+    destruct_dir_record(&dir);
+    return res;
+}
+
 static int naive_truncate(const char *path, off_t size)
 {
     int pathlen = strlen(path);
@@ -288,6 +363,7 @@ static struct fuse_operations naivefs_oper = {
     .statfs = naive_statfs,
     .readdir = naive_readdir,
     .mkdir = naive_mkdir,
+    .rmdir = naive_rmdir,
     .getattr = naive_getattr,
     .utimens = naive_utimens,
     .open = naive_open,
@@ -295,6 +371,7 @@ static struct fuse_operations naivefs_oper = {
     .read = naive_read,
     .write = naive_write,
     .mknod = naive_mknod,
+    .unlink = naive_unlink,
     .truncate = naive_truncate
 };
 

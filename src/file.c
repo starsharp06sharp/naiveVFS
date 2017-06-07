@@ -273,6 +273,29 @@ void read_dir(fileno_t fileno, struct dir_record *dest)
     }
 }
 
+void write_dir(const struct dir_record *dir)
+{
+    int buflen = sizeof(dir->file_count), bufoff = 0;
+    for (file_count_t i = 0; i < dir->file_count; i++) {
+        buflen += sizeof(dir->list_first_block_id[i]);
+        buflen += strlen(dir->list_filename[i]) + 1;
+    }
+    uint8_t buf[buflen];
+    memcpy(buf + bufoff, &dir->file_count, sizeof(dir->file_count));
+    bufoff += sizeof(dir->file_count);
+    for (file_count_t i = 0; i < dir->file_count; i++) {
+        memcpy(buf + bufoff, &(dir->list_first_block_id[i]), sizeof(dir->list_first_block_id[i]));
+        bufoff += sizeof(dir->list_first_block_id[i]);
+        int pathlen = strlen(dir->list_filename[i]) + 1;
+        memcpy(buf + bufoff, dir->list_filename[i], pathlen);
+        bufoff += pathlen;
+    }
+    write_file(dir->dir_fileno, buf, buflen, 0);
+    if (metadatas[dir->dir_fileno].file_size > buflen) {
+        cut_file(dir->dir_fileno, buflen);
+    }
+}
+
 void destruct_dir_record(struct dir_record *rec)
 {
     free(rec->list_first_block_id);
@@ -338,4 +361,14 @@ void init_empty_dir(fileno_t fileno, block_size_t father_block_id)
     buf_off += sizeof(block_size_t);
     memcpy(buf + buf_off, "..", sizeof(".."));
     write_file(fileno, buf, EMPTY_DIR_SIZE, 0);
+}
+
+void remove_item_in_dir(struct dir_record *dir, file_count_t index)
+{
+    free(dir->list_filename[index]);
+    while (++index < dir->file_count) {
+        dir->list_first_block_id[index - 1] = dir->list_first_block_id[index];
+        dir->list_filename[index - 1] = dir->list_filename[index];
+    }
+    dir->file_count--;
 }

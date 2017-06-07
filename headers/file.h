@@ -117,6 +117,11 @@ bool cut_file(fileno_t fileno, file_size_t size);
 void read_dir(fileno_t fileno, struct dir_record *dest);
 
 /*
+    write dir into the dir into blockfile
+*/
+void write_dir(const struct dir_record *dir);
+
+/*
     destruct any dynamic alloc memory in  dir_record
 */
 void destruct_dir_record(struct dir_record *rec);
@@ -134,6 +139,11 @@ file_count_t find_name_in_dir_record(const char *name, struct dir_record *rec);
     return the opened new files fileno
 */
 fileno_t create_file(fileno_t dir_fileno, const char *filename, bool is_dir);
+
+/*
+    remove a item in dir
+*/
+void remove_item_in_dir(struct dir_record *dir, file_count_t index);
 
 /*
     init a empty dir:
